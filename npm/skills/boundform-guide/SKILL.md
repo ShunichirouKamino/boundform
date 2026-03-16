@@ -11,13 +11,13 @@ boundform validates HTML form constraints against a YAML specification. It fetch
 
 ```bash
 # Validate forms against a YAML spec
-boundform --config boundform/boundform.yml
+npx boundform --config boundform/boundform.yml
 
 # With authentication (e.g., Auth.js session cookie)
-boundform --config boundform/boundform.yml --cookie "authjs.session-token=eyJ..."
+npx boundform --config boundform/boundform.yml --cookie "authjs.session-token=eyJ..."
 
 # JSON output
-boundform --config boundform/boundform.yml --format json
+npx boundform --config boundform/boundform.yml --format json
 ```
 
 ## CLI Flags
@@ -110,7 +110,7 @@ Protected pages require authentication cookies or headers.
 
 ```bash
 # Get cookie from browser DevTools: Application → Cookies → authjs.session-token
-boundform --config boundform/boundform.yml \
+npx boundform --config boundform/boundform.yml \
   --cookie "authjs.session-token=eyJhbGc..."
 ```
 
@@ -118,10 +118,10 @@ Important: authenticated users accessing `/login` or `/register` may get redirec
 
 ```bash
 # Public pages (no cookie)
-boundform --config boundform-public.yml
+npx boundform --config boundform-public.yml
 
 # Authenticated pages (with cookie)
-boundform --config boundform-auth.yml --cookie "authjs.session-token=..."
+npx boundform --config boundform-auth.yml --cookie "authjs.session-token=..."
 ```
 
 For design decisions about authentication, read `docs/adr/0003-authentication-support.md`.
@@ -129,7 +129,7 @@ For design decisions about authentication, read `docs/adr/0003-authentication-su
 ### Bearer token / API auth
 
 ```bash
-boundform --config boundform/boundform.yml \
+npx boundform --config boundform/boundform.yml \
   --header "Authorization: Bearer eyJhbGc..."
 ```
 
