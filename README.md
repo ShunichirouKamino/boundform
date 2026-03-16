@@ -1,5 +1,9 @@
 # boundform
 
+[![npm version](https://img.shields.io/npm/v/boundform)](https://www.npmjs.com/package/boundform)
+[![GitHub Release](https://img.shields.io/github/v/release/ShunichirouKamino/boundform)](https://github.com/ShunichirouKamino/boundform/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **A fast guardrail before E2E** — validate HTML form constraints against a YAML spec, no browser required.
 
 > Not a replacement for Playwright. A high-speed checkpoint you run *before* it.
