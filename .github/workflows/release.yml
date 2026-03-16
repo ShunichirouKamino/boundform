@@ -1,15 +1,70 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump category"
+        required: true
+        type: choice
+        options:
+          - micro
+          - minor
+          - major
+      dry_run:
+        description: "Dry run (skip actual release)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
 
 jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      current: ${{ steps.resolve.outputs.current }}
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect existing versions from tags
+        id: versions
+        run: |
+          VERSIONS=$(git tag -l 'v*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n)
+          echo "versions<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$VERSIONS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate next version
+        id: resolve
+        uses: ./.github/actions/resolve-version
+        with:
+          bump: ${{ inputs.bump }}
+          versions: ${{ steps.versions.outputs.versions }}
+          fallback: '0.1.0'
+
+      - name: Set tag name
+        id: tag
+        run: echo "tag=v${{ steps.resolve.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Version summary
+        run: |
+          echo "### Version Resolution" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Bump: \`${{ inputs.bump }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Current: \`${{ steps.resolve.outputs.current }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Next: \`${{ steps.resolve.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry run: \`${{ inputs.dry_run }}\`" >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    needs: resolve-version
+    if: ${{ inputs.dry_run == false }}
     strategy:
       matrix:
         include:
@@ -49,6 +104,13 @@ jobs:
             target
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Update Cargo.toml version
+        shell: bash
+        run: |
+          VERSION=${{ needs.resolve-version.outputs.version }}
+          sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          rm -f Cargo.toml.bak
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -63,11 +125,33 @@ jobs:
           path: ${{ matrix.asset }}
 
   release:
-    needs: build
+    needs: [resolve-version, build]
+    if: ${{ inputs.dry_run == false }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update version in Cargo.toml and npm/package.json
+        run: |
+          VERSION=${{ needs.resolve-version.outputs.version }}
+          TAG=${{ needs.resolve-version.outputs.tag }}
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          cd npm && npm version $VERSION --no-git-tag-version
+
+      - name: Commit version bump
+        run: |
+          VERSION=${{ needs.resolve-version.outputs.version }}
+          TAG=${{ needs.resolve-version.outputs.tag }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml npm/package.json
+          git commit -m "chore: bump version to ${VERSION}" || echo "No changes to commit"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin main
+          git push origin "${TAG}"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -75,11 +159,10 @@ jobs:
           path: artifacts
 
       - name: Generate release notes
-        id: notes
-        shell: bash
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG=${{ needs.resolve-version.outputs.tag }}
+          VERSION=${{ needs.resolve-version.outputs.version }}
 
           echo "## What's Changed" > release_notes.md
           echo "" >> release_notes.md
@@ -126,30 +209,33 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ github.ref_name }} \
+          gh release create ${{ needs.resolve-version.outputs.tag }} \
             artifacts/**/* \
-            --title "${{ github.ref_name }}" \
+            --title "${{ needs.resolve-version.outputs.tag }}" \
             --notes-file release_notes.md
 
   publish-npm:
-    needs: release
+    needs: [resolve-version, release]
+    if: ${{ inputs.dry_run == false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write    # Required for npm Trusted Publishing (OIDC)
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Sync version from tag
+      - name: Sync version from resolved version
         working-directory: npm
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${{ needs.resolve-version.outputs.version }}
           CURRENT=$(node -p "require('./package.json').version")
           if [ "$VERSION" != "$CURRENT" ]; then
             npm version $VERSION --no-git-tag-version

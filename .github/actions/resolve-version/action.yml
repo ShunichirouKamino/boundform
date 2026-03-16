@@ -1,0 +1,69 @@
+name: Resolve next version
+description: |
+  Calculate the next version from existing git tags.
+  - major: X+1.0.0
+  - minor: X.Y+1.0
+  - micro: X.Y.Z+1
+
+inputs:
+  bump:
+    description: 'Version bump category (major / minor / micro)'
+    required: true
+  versions:
+    description: 'Existing versions (newline-separated, x.y.z format)'
+    required: true
+  fallback:
+    description: 'Initial version when no versions exist'
+    required: false
+    default: '0.1.0'
+
+outputs:
+  version:
+    description: 'Calculated next version'
+    value: ${{ steps.calc.outputs.version }}
+  current:
+    description: 'Current latest version'
+    value: ${{ steps.calc.outputs.current }}
+
+runs:
+  using: composite
+  steps:
+    - name: Calculate next version
+      id: calc
+      shell: bash
+      run: |
+        BUMP="${{ inputs.bump }}"
+        FALLBACK="${{ inputs.fallback }}"
+
+        # Filter valid semver versions
+        VERSIONS=$(echo "${{ inputs.versions }}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n || true)
+
+        if [ -z "$VERSIONS" ]; then
+          echo "No existing versions found. Using fallback: $FALLBACK"
+          echo "version=$FALLBACK" >> "$GITHUB_OUTPUT"
+          echo "current=none" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        CURRENT=$(echo "$VERSIONS" | tail -1)
+        echo "Current latest: $CURRENT"
+        echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+
+        MAX_X=$(echo "$VERSIONS" | cut -d. -f1 | sort -n | tail -1)
+
+        if [ "$BUMP" = "major" ]; then
+          NEXT="$((MAX_X + 1)).0.0"
+        elif [ "$BUMP" = "minor" ]; then
+          MAX_Y=$(echo "$VERSIONS" | grep "^${MAX_X}\." | cut -d. -f2 | sort -n | tail -1)
+          NEXT="${MAX_X}.$((MAX_Y + 1)).0"
+        elif [ "$BUMP" = "micro" ]; then
+          MAX_Y=$(echo "$VERSIONS" | grep "^${MAX_X}\." | cut -d. -f2 | sort -n | tail -1)
+          MAX_Z=$(echo "$VERSIONS" | grep "^${MAX_X}\.${MAX_Y}\." | cut -d. -f3 | sort -n | tail -1)
+          NEXT="${MAX_X}.${MAX_Y}.$((MAX_Z + 1))"
+        else
+          echo "::error::Unknown bump type: $BUMP (expected: major / minor / micro)"
+          exit 1
+        fi
+
+        echo "Next version: $NEXT"
+        echo "version=$NEXT" >> "$GITHUB_OUTPUT"
