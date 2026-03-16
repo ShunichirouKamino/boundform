@@ -49,20 +49,6 @@ function init() {
     console.log("  [created] boundform.yml");
   }
 
-  // 3. Update .gitignore
-  const gitignorePath = path.join(cwd, ".gitignore");
-  const ignoreEntry = ".claude/skills/*-workspace/";
-
-  if (fs.existsSync(gitignorePath)) {
-    const content = fs.readFileSync(gitignorePath, "utf-8");
-    if (!content.includes(ignoreEntry)) {
-      fs.appendFileSync(gitignorePath, `\n# boundform skill workspaces\n${ignoreEntry}\n`);
-      console.log("  [updated] .gitignore");
-    } else {
-      console.log("  [skip] .gitignore (already configured)");
-    }
-  }
-
   console.log("\nDone! Next steps:");
   console.log("  1. Edit boundform.yml with your form constraints");
   console.log("  2. Run: npx boundform --config boundform.yml");
