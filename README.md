@@ -190,6 +190,70 @@ steps:
 
 This keeps boundform fast and dependency-free while still supporting CSR apps through composition.
 
+## Using with Zod + conform (Next.js)
+
+When using Zod for form validation, constraints are defined in JavaScript and **not automatically reflected in HTML attributes**. Without HTML attributes, boundform has nothing to check.
+
+The recommended approach is to use [conform](https://conform.guide/) to automatically generate HTML attributes from your Zod schema:
+
+```
+Zod schema (single source of truth)
+  ├→ HTML attributes  ← conform generates automatically
+  ├→ Client JS        ← zodResolver handles validation
+  └→ Server-side      ← Server Actions validate with Zod
+```
+
+### Setup
+
+```tsx
+// schema.ts — define once
+import { z } from "zod";
+
+export const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(128),
+});
+```
+
+```tsx
+// register/page.tsx — conform auto-generates HTML attributes
+import { getFormProps, getInputProps } from "@conform-to/react";
+import { parseWithZod } from "@conform-to/zod";
+
+export default function RegisterPage() {
+  const [form, fields] = useForm({
+    onValidate({ formData }) {
+      return parseWithZod(formData, { schema: registerSchema });
+    },
+  });
+
+  return (
+    <form {...getFormProps(form)}>
+      {/* conform adds required, type="email" automatically */}
+      <input {...getInputProps(fields.email, { type: "email" })} />
+      {/* conform adds required, minLength="8", maxLength="128" */}
+      <input {...getInputProps(fields.password, { type: "password" })} />
+    </form>
+  );
+}
+```
+
+The SSR-rendered HTML will include constraint attributes:
+
+```html
+<input type="email" name="email" required="" />
+<input type="password" name="password" required="" minlength="8" maxlength="128" />
+```
+
+Now boundform can validate these constraints against your YAML spec.
+
+### Why bother with HTML attributes if Zod handles validation?
+
+1. **Progressive enhancement** — forms work even before JS loads (important for Server Actions)
+2. **Instant UX** — browser-native validation fires immediately, no JS round-trip
+3. **Accessibility** — `required` is announced by screen readers (WCAG compliance)
+4. **Defense in depth** — HTML (browser) + Zod (JS) + Server Actions (server) = 3 layers of validation
+
 ## Installation
 
 ```bash

@@ -2,7 +2,7 @@
 
 use crate::error::{BoundformError, Result};
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, COOKIE};
+use reqwest::header::{COOKIE, HeaderMap, HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
 use std::net::ToSocketAddrs;
 use std::path::Path;
@@ -68,7 +68,9 @@ fn validate_url(url_str: &str) -> Result<()> {
         }
 
         // Resolve DNS and check IP addresses
-        let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+        let port = parsed
+            .port()
+            .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
         let addr_str = format!("{host}:{port}");
         if let Ok(addrs) = addr_str.to_socket_addrs() {
             for addr in addrs {
@@ -79,12 +81,13 @@ fn validate_url(url_str: &str) -> Result<()> {
                     )));
                 }
                 // Check for link-local (169.254.x.x) - common cloud metadata endpoint
-                if let std::net::IpAddr::V4(v4) = ip {
-                    if v4.octets()[0] == 169 && v4.octets()[1] == 254 {
-                        return Err(BoundformError::ConfigError(format!(
-                            "blocked request to link-local address: {ip}"
-                        )));
-                    }
+                if let std::net::IpAddr::V4(v4) = ip
+                    && v4.octets()[0] == 169
+                    && v4.octets()[1] == 254
+                {
+                    return Err(BoundformError::ConfigError(format!(
+                        "blocked request to link-local address: {ip}"
+                    )));
                 }
             }
         }
@@ -140,13 +143,13 @@ fn fetch_from_url(url: &str, options: &FetchOptions) -> Result<String> {
     let response = client.get(url).headers(headers).send()?;
 
     // Check content length before reading body
-    if let Some(len) = response.content_length() {
-        if len as usize > MAX_RESPONSE_SIZE {
-            return Err(BoundformError::ConfigError(format!(
-                "response too large: {} bytes (max: {} bytes)",
-                len, MAX_RESPONSE_SIZE
-            )));
-        }
+    if let Some(len) = response.content_length()
+        && len as usize > MAX_RESPONSE_SIZE
+    {
+        return Err(BoundformError::ConfigError(format!(
+            "response too large: {} bytes (max: {} bytes)",
+            len, MAX_RESPONSE_SIZE
+        )));
     }
 
     let body = response.text()?;
@@ -168,9 +171,7 @@ fn read_from_file(path_str: &str) -> Result<String> {
     let path = Path::new(path_str);
 
     // Canonicalize the path to resolve .. and symlinks
-    let canonical = path
-        .canonicalize()
-        .map_err(|e| BoundformError::IoError(e))?;
+    let canonical = path.canonicalize().map_err(BoundformError::IoError)?;
 
     // Block absolute paths that look like system files
     let path_string = canonical.to_string_lossy();

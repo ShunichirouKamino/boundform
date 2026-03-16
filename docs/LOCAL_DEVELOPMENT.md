@@ -93,14 +93,15 @@ cargo test -- --nocapture
 
 ```
 src/parser.rs       # HTML パース関連のユニットテスト
-src/generator.rs    # テストケース生成のユニットテスト
-src/validator.rs    # バリデーションロジックのユニットテスト
+src/config.rs       # YAML 設定パースのユニットテスト
+src/comparator.rs   # 制約比較ロジックのユニットテスト
 tests/
   integration_test.rs         # CLI 経由のインテグレーションテスト
   fixtures/
     register.html             # 登録フォーム (email, username, password)
     settings.html             # 設定フォーム (number, pattern, url, textarea, select)
-    no_form.html              # フォームなし (エラーケース検証用)
+    boundform.yml             # register.html に一致する設定
+    boundform_mismatch.yml    # 意図的に不一致な設定
 ```
 
 ## 4. Lint & Format
@@ -123,98 +124,58 @@ cargo fmt
 ### ローカルファイルで確認
 
 ```bash
-# サンプルアプリ (登録フォーム + フィードバックフォーム)
-cargo run -- check examples/sample-app/index.html
+# サンプルアプリに対して validate
+cargo run -- --config examples/sample-app/boundform.yml
 
-# テストフィクスチャ
-cargo run -- check tests/fixtures/register.html
-cargo run -- check tests/fixtures/settings.html
+# テストフィクスチャに対して validate
+cargo run -- --config tests/fixtures/boundform.yml
 ```
 
-実行結果の例 (`examples/sample-app/index.html`):
+実行結果の例:
 
 ```
-[register form] 5 field(s) found
-
-  username (type=text, required, minlength=3, maxlength=20, pattern)
-    ✓ empty string → rejected (required)
-    ✓ 2 chars → rejected (below minlength=3)
-    ✓ 3 chars → accepted (at minlength boundary)
-    ✓ 4 chars → accepted (above minlength)
-    ✓ 19 chars → accepted (below maxlength)
-    ✓ 20 chars → accepted (at maxlength boundary)
-    ✓ 21 chars → rejected (above maxlength=20)
-    ✓ non-matching string → rejected (pattern=[a-zA-Z0-9_]+)
-    ✓ matching string → accepted (pattern=[a-zA-Z0-9_]+)
-
-  email (type=email, required)
-    ✓ empty string → rejected (required)
-    ✓ invalid email (no @) → rejected (type=email)
-    ✓ valid email → accepted
-
-  password (type=password, required, minlength=10, maxlength=128)
-    ✓ empty string → rejected (required)
-    ✓ 9 chars → rejected (below minlength=10)
-    ✓ 10 chars → accepted (at minlength boundary)
-    ...
-
-  age (type=number, min=13, max=150, step=1)
-    ✓ 12 → rejected (below min=13)
-    ✓ 13 → accepted (at min boundary)
-    ✓ 150 → accepted (at max boundary)
-    ✓ 151 → rejected (above max=150)
-    ...
-
-[feedback form] 5 field(s) found
+[register] examples/sample-app/index.html
+  username
+    ✓ type = text
+    ✓ required = true
+    ✓ minlength = 3
+    ✓ maxlength = 20
+    ✓ pattern = [a-zA-Z0-9_]+
+  email
+    ✓ type = email
+    ✓ required = true
+  password
+    ✓ type = password
+    ✓ required = true
+    ✓ minlength = 10
+    ✓ maxlength = 128
   ...
+
+1 page(s), 2 form(s), all 34 checks passed
 ```
 
 ### JSON 出力
 
 ```bash
-cargo run -- check examples/sample-app/index.html --format json
-```
-
-```json
-{
-  "form_identifier": "register",
-  "field_count": 5,
-  "field_results": [
-    {
-      "field_name": "username",
-      "constraint_summary": "type=text, required, minlength=3, maxlength=20, pattern",
-      "results": [
-        {
-          "test_case": {
-            "field_name": "username",
-            "description": "empty string → rejected (required)",
-            "test_value": "",
-            "constraint": "required",
-            "expected": "rejected"
-          },
-          "actual": "rejected",
-          "passed": true
-        }
-      ]
-    }
-  ]
-}
+cargo run -- --config examples/sample-app/boundform.yml --format json
 ```
 
 ### ローカルサーバーに対して実行
 
-自分のアプリケーションに対して boundform を実行する場合:
+```yaml
+# boundform.yml
+pages:
+  - url: "http://localhost:3000/register"
+    forms:
+      - index: 0
+        fields:
+          email:
+            type: email
+            required: true
+```
 
 ```bash
-# Next.js / SvelteKit / Nuxt などの SSR アプリを起動
-cd ~/my-nextjs-app
-npm run dev
-# → http://localhost:3000 で起動
-
-# 別ターミナルで boundform を実行
-cargo run -- check http://localhost:3000/register
-cargo run -- check http://localhost:3000/login
-cargo run -- check http://localhost:3000/settings
+cargo run -- --config boundform.yml
 ```
 
 ### Windows ホストで実行
@@ -222,33 +183,7 @@ cargo run -- check http://localhost:3000/settings
 Devcontainer 内でクロスコンパイル後、Windows 側の PowerShell/cmd から:
 
 ```powershell
-# プロジェクトディレクトリ内から
-.\target\x86_64-pc-windows-gnu\release\boundform.exe check .\examples\sample-app\index.html
-
-# ローカルサーバーに対して
-.\target\x86_64-pc-windows-gnu\release\boundform.exe check http://localhost:3000/register
-
-# PATH の通った場所にコピーして使う場合
-copy .\target\x86_64-pc-windows-gnu\release\boundform.exe $env:USERPROFILE\.local\bin\
-boundform.exe check http://localhost:3000/register
-```
-
-## 6. 自分の HTML で試す
-
-任意の HTML ファイルを作成して boundform に渡せます:
-
-```html
-<!-- my-form.html -->
-<form name="my-form">
-  <input type="text" name="name" required maxlength="100" />
-  <input type="email" name="email" required />
-  <input type="number" name="quantity" min="1" max="99" step="1" />
-  <textarea name="note" minlength="10" maxlength="500"></textarea>
-</form>
-```
-
-```bash
-cargo run -- check my-form.html
+.\target\x86_64-pc-windows-gnu\release\boundform.exe --config boundform.yml
 ```
 
 ## Devcontainer を使わない場合
@@ -306,11 +241,11 @@ boundform/
 ├── src/
 │   ├── main.rs                 # CLI エントリポイント (clap)
 │   ├── error.rs                # カスタムエラー型 (thiserror)
-│   ├── source.rs               # URL / ファイルから HTML 取得
+│   ├── source.rs               # URL / ファイルから HTML 取得 (cookie/header 対応)
 │   ├── parser.rs               # HTML パース、フォーム・フィールド抽出
-│   ├── model.rs                # データ構造 (FormField, BoundaryTestCase 等)
-│   ├── generator.rs            # 境界値テストケース生成
-│   ├── validator.rs            # HTML5 バリデーションルール評価
+│   ├── model.rs                # データ構造 (FormField, FormInfo, InputType)
+│   ├── config.rs               # YAML 設定パース
+│   ├── comparator.rs           # 期待値 vs 実際の制約比較
 │   └── reporter.rs             # 出力フォーマット (Terminal / JSON)
 ├── tests/
 │   ├── integration_test.rs     # CLI インテグレーションテスト

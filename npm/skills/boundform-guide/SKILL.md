@@ -149,6 +149,66 @@ npx playwright evaluate \
 #   - url: "rendered.html"
 ```
 
+## Using with Zod (Next.js / React)
+
+boundform validates **HTML constraint attributes**, not JavaScript validation logic. If your project uses Zod for form validation, the HTML may have **no constraint attributes at all** — Zod constraints exist only as JS objects and are not reflected in the rendered HTML.
+
+### The problem
+
+```tsx
+// Zod schema defines constraints in JS
+const schema = z.object({
+  password: z.string().min(8).max(128),
+});
+
+// But the rendered HTML has NO attributes:
+// <input name="password" />   ← no required, no minlength, no maxlength
+```
+
+Without HTML attributes, boundform has nothing to check.
+
+### The solution: use conform
+
+[conform](https://conform.guide/) automatically generates HTML constraint attributes from Zod schemas. It acts as a bridge between Zod and HTML:
+
+```tsx
+import { getInputProps } from "@conform-to/react";
+import { parseWithZod } from "@conform-to/zod";
+
+// conform auto-generates: required, minLength="8", maxLength="128"
+<input {...getInputProps(fields.password, { type: "password" })} />
+```
+
+The SSR-rendered HTML now includes constraint attributes that boundform can validate:
+
+```html
+<input type="password" name="password" required="" minlength="8" maxlength="128" />
+```
+
+### Why HTML attributes matter even with Zod
+
+1. **Progressive enhancement** — forms validate before JS loads (critical for Server Actions)
+2. **Instant UX** — browser-native validation fires immediately without JS round-trip
+3. **Accessibility** — screen readers announce `required` fields (WCAG compliance)
+4. **Defense in depth** — HTML (browser) + Zod (client JS) + Server Actions (server) = 3-layer validation
+
+### Recommended stack (Next.js)
+
+| Layer | Tool | Role |
+|-------|------|------|
+| Schema definition | Zod | Single source of truth |
+| HTML attribute generation | conform | Zod schema → HTML attributes |
+| Client validation | react-hook-form + zodResolver | Rich client-side UX |
+| HTML constraint verification | boundform | CI check that HTML matches spec |
+| Server validation | Zod (Server Actions) | Tamper prevention |
+
+### What to tell users
+
+If a user's form fields show "Missing fields" or unexpected results, check:
+1. Are they using Zod without conform? → HTML attributes are likely absent
+2. Recommend adding conform or manually adding HTML constraint attributes
+3. Point them to `docs/adr/0005-html-attributes-as-validation-surface.md` for the full rationale
+
 ## Troubleshooting
 
 ### "0 field(s) found" or "Missing fields"
@@ -209,4 +269,5 @@ For deeper understanding of design decisions:
 - `docs/adr/0001-form-identifier-resolution.md` — How forms are identified
 - `docs/adr/0002-form-identifier-by-selector-and-index.md` — Index and selector matching
 - `docs/adr/0003-authentication-support.md` — Cookie and header auth
+- `docs/adr/0005-html-attributes-as-validation-surface.md` — Why HTML attributes matter, Zod + conform guidance
 - `docs/DESIGN_DECISIONS.md` — Field name fallback, scope boundaries, SPA approach
