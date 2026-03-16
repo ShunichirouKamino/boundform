@@ -78,8 +78,21 @@ pub struct FieldExpectation {
     pub step: Option<f64>,
 }
 
+/// Maximum config file size (1 MB).
+const MAX_CONFIG_SIZE: u64 = 1024 * 1024;
+
 /// Load and parse a YAML config file.
 pub fn load_config(path: &str) -> Result<Config> {
+    // Check file size before reading to prevent YAML bombs
+    let metadata = std::fs::metadata(path).map_err(BoundformError::IoError)?;
+    if metadata.len() > MAX_CONFIG_SIZE {
+        return Err(BoundformError::ConfigError(format!(
+            "config file too large: {} bytes (max: {} bytes)",
+            metadata.len(),
+            MAX_CONFIG_SIZE
+        )));
+    }
+
     let content = std::fs::read_to_string(path).map_err(BoundformError::IoError)?;
     let config: Config =
         serde_yml::from_str(&content).map_err(|e| BoundformError::ConfigError(e.to_string()))?;

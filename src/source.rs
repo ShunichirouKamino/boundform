@@ -99,8 +99,15 @@ fn fetch_from_url(url: &str, options: &FetchOptions) -> Result<String> {
     // Add cookies
     if !options.cookies.is_empty() {
         let cookie_str = options.cookies.join("; ");
-        if let Ok(val) = HeaderValue::from_str(&cookie_str) {
-            headers.insert(COOKIE, val);
+        match HeaderValue::from_str(&cookie_str) {
+            Ok(val) => {
+                headers.insert(COOKIE, val);
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: cookie value contains invalid characters and was not sent: {e}"
+                );
+            }
         }
     }
 
@@ -109,11 +116,18 @@ fn fetch_from_url(url: &str, options: &FetchOptions) -> Result<String> {
         if let Some((name, value)) = header.split_once(':') {
             let name = name.trim();
             let value = value.trim();
-            if let (Ok(header_name), Ok(header_value)) = (
+            match (
                 HeaderName::from_bytes(name.as_bytes()),
                 HeaderValue::from_str(value),
             ) {
-                headers.insert(header_name, header_value);
+                (Ok(header_name), Ok(header_value)) => {
+                    headers.insert(header_name, header_value);
+                }
+                _ => {
+                    eprintln!(
+                        "Warning: header '{name}' contains invalid characters and was not sent"
+                    );
+                }
             }
         }
     }
