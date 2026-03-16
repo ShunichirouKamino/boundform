@@ -205,12 +205,20 @@ jobs:
           echo "" >> release_notes.md
           echo "**Full Changelog**: ${CHANGELOG_URL}" >> release_notes.md
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > ../boundform-checksums.sha256
+          cd ..
+          cat boundform-checksums.sha256
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${{ needs.resolve-version.outputs.tag }} \
             artifacts/**/* \
+            boundform-checksums.sha256 \
             --title "${{ needs.resolve-version.outputs.tag }}" \
             --notes-file release_notes.md
 
