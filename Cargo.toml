@@ -1,6 +1,6 @@
 [package]
 name = "boundform"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Generate boundary-value tests from HTML form constraints, no browser required"
 license = "MIT"
