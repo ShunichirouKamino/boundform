@@ -15,17 +15,17 @@ The dual-agent approach catches blind spots that a single reviewer might miss.
 
 ### Step 1: Launch Codex in background
 
-Start Codex review as a background process. The `codex review` command accepts EITHER a scope flag (`--uncommitted`, `--base`) OR a prompt, but NOT both. Use the prompt form to direct Codex to read AGENTS.md:
+Launch Codex review as a background task using the Bash tool with `run_in_background: true`. Use the prompt-only form because `codex review` does not allow `--uncommitted` or `--base` together with a prompt argument.
 
 ```bash
-codex review "Read the file AGENTS.md in this repository root. It contains a detailed security review checklist. Follow every section systematically. Report all findings with severity (Critical/High/Medium/Low/Info), file paths, line numbers, and fix recommendations." 2>&1 | tee codex-security-review.md &
-CODEX_PID=$!
+codex review "Read the file AGENTS.md in this repository root. It contains a detailed security review checklist. Follow every section systematically. Report all findings with severity (Critical/High/Medium/Low/Info), file paths, line numbers, and fix recommendations." 2>&1 | tee codex-security-review.md
 ```
+
+Run this command with `run_in_background: true` so Claude's review can proceed in parallel. The output file will be available when the background task completes.
 
 **If Codex fails** (authentication error, not installed, etc.), log the error and continue with Claude-only review. Common failures:
 - `refresh_token_reused` → user needs to run `codex logout && codex login`
 - `command not found` → install with `npm install -g @openai/codex`
-- `--uncommitted cannot be used with PROMPT` → this is expected, use the prompt-only form above
 
 ### Step 2: Run Claude's review
 
@@ -65,14 +65,7 @@ For each finding, use this format:
 
 ### Step 3: Collect Codex results
 
-After Claude's review is complete, check if Codex has finished:
-
-```bash
-kill -0 $CODEX_PID 2>/dev/null && echo "Codex still running..." || echo "Codex finished"
-cat codex-security-review.md 2>/dev/null || echo "No Codex output available"
-```
-
-If Codex is still running, inform the user and suggest checking `codex-security-review.md` later.
+After Claude's review is complete, check if the Codex background task has finished. Read `codex-security-review.md` if it exists. If Codex is still running, inform the user that results will appear in `codex-security-review.md` when complete — do NOT delete this file.
 
 ### Step 4: Generate comparison report
 
@@ -85,7 +78,7 @@ If Codex is still running, inform the user and suggest checking `codex-security-
 | 1 | HIGH     | SSRF     | ...   | ...  |
 
 ### Codex Findings
-(from codex-security-review.md, or "Codex unavailable — auth expired / not installed")
+(from codex-security-review.md, or "Codex still running / unavailable")
 
 ### Cross-Agent Analysis
 - Findings detected by both agents (high confidence)
@@ -98,11 +91,9 @@ If Codex is still running, inform the user and suggest checking `codex-security-
 3. ...
 ```
 
-### Step 5: Clean up
+### Step 5: Offer clean up
 
-```bash
-rm -f codex-security-review.md
-```
+Ask the user if they want to keep `codex-security-review.md` for reference. Only delete if the user confirms.
 
 ## Reference
 
