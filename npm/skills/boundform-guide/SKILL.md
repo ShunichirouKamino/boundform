@@ -11,13 +11,13 @@ boundform validates HTML form constraints against a YAML specification. It fetch
 
 ```bash
 # Validate forms against a YAML spec
-boundform --config boundform.yml
+boundform --config boundform/boundform.yml
 
 # With authentication (e.g., Auth.js session cookie)
-boundform --config boundform.yml --cookie "authjs.session-token=eyJ..."
+boundform --config boundform/boundform.yml --cookie "authjs.session-token=eyJ..."
 
 # JSON output
-boundform --config boundform.yml --format json
+boundform --config boundform/boundform.yml --format json
 ```
 
 ## CLI Flags
@@ -110,7 +110,7 @@ Protected pages require authentication cookies or headers.
 
 ```bash
 # Get cookie from browser DevTools: Application → Cookies → authjs.session-token
-boundform --config boundform.yml \
+boundform --config boundform/boundform.yml \
   --cookie "authjs.session-token=eyJhbGc..."
 ```
 
@@ -129,7 +129,7 @@ For design decisions about authentication, read `docs/adr/0003-authentication-su
 ### Bearer token / API auth
 
 ```bash
-boundform --config boundform.yml \
+boundform --config boundform/boundform.yml \
   --header "Authorization: Bearer eyJhbGc..."
 ```
 
