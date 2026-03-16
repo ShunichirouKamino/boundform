@@ -9,19 +9,19 @@ This skill performs a comprehensive security review by running two agents in par
 1. **Claude Code** — reviews the code inline following the checklist below
 2. **OpenAI Codex** — launched as a separate process via `codex review`
 
-Results are persisted to `reviews/NNNN-YYYY-MM-DD/` and committed to git for historical tracking.
+Results are persisted to `docs/reviews/NNNN-YYYY-MM-DD/` and committed to git for historical tracking.
 
 ## Workflow
 
 ### Step 0: Create review directory
 
-Determine the next review number by counting existing directories in `reviews/`:
+Determine the next review number by counting existing directories in `docs/reviews/`:
 
 ```bash
 # Get next review number (0001, 0002, etc.)
-NEXT=$(printf "%04d" $(( $(ls -d reviews/[0-9]* 2>/dev/null | wc -l) + 1 )))
+NEXT=$(printf "%04d" $(( $(ls -d docs/reviews/[0-9]* 2>/dev/null | wc -l) + 1 )))
 DATE=$(date +%Y-%m-%d)
-REVIEW_DIR="reviews/${NEXT}-${DATE}"
+REVIEW_DIR="docs/reviews/${NEXT}-${DATE}"
 mkdir -p "$REVIEW_DIR"
 ```
 
@@ -134,7 +134,7 @@ Ask the user if they want to push, or if they want to fix the findings first.
 ### Final directory structure
 
 ```
-reviews/
+docs/reviews/
 ├── 0001-2026-03-16/
 │   ├── claude-review.md
 │   ├── codex-review.md
