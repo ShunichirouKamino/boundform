@@ -68,6 +68,42 @@ Rather than publishing platform-specific npm packages (e.g., `@boundform/win32-x
 
 The download-from-releases approach is simpler and sufficient for the current scale. The binary is cached at `~/.cache/boundform/{version}/` so the download only happens once per version.
 
+### Execution flow: what happens when you run `npx boundform`
+
+```
+User runs: npx boundform --config boundform.yml
+  │
+  ├─ npm downloads the boundform npm package (7KB, no binary inside)
+  │
+  ├─ bin/boundform.js starts
+  │    ├─ If argv[2] === "init" → run scripts/init.js (copy skills & template)
+  │    └─ Otherwise → call scripts/download-binary.js
+  │
+  ├─ scripts/download-binary.js
+  │    ├─ Detect platform (os.platform() + os.arch())
+  │    │   e.g. win32-x64 → target: x86_64-pc-windows-gnu
+  │    │
+  │    ├─ Check cache: ~/.cache/boundform/{version}/boundform.exe
+  │    │   ├─ Cache hit → use cached binary, skip download
+  │    │   └─ Cache miss → download from GitHub Releases:
+  │    │        GET https://github.com/ShunichirouKamino/boundform/
+  │    │            releases/download/v{version}/boundform-{target}.exe
+  │    │        Save to ~/.cache/boundform/{version}/boundform.exe
+  │    │
+  │    └─ Return path to binary
+  │
+  └─ bin/boundform.js spawns the binary as a child process
+       with all CLI arguments forwarded
+       └─ boundform.exe --config boundform.yml
+           (native Rust binary runs, validates forms, outputs results)
+```
+
+Key points:
+- The npm package contains **only JavaScript** (7KB). No Rust binary is shipped via npm.
+- The binary is fetched from **GitHub Releases** — the same artifacts created by the CI pipeline.
+- After the first run, the binary is **cached locally** at `~/.cache/boundform/{version}/`. Subsequent runs start instantly.
+- Platform detection maps Node.js `os.platform()`/`os.arch()` to Rust target triples (e.g., `darwin-arm64` → `aarch64-apple-darwin`).
+
 ### Platform support
 
 Binaries are built for four targets:
