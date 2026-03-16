@@ -160,24 +160,38 @@ jobs:
 
       - name: Generate release notes
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT=${{ needs.resolve-version.outputs.current }}
           TAG=${{ needs.resolve-version.outputs.tag }}
           VERSION=${{ needs.resolve-version.outputs.version }}
 
-          echo "## What's Changed" > release_notes.md
+          # Use the known previous version from resolve-version (not git describe)
+          if [ "$CURRENT" = "none" ]; then
+            PREV_TAG=""
+          else
+            PREV_TAG="v${CURRENT}"
+          fi
+
+          echo "## What's Changed in ${TAG}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "Previous version: ${PREV_TAG:-"(first release)"}" >> release_notes.md
           echo "" >> release_notes.md
 
           if [ -z "$PREV_TAG" ]; then
             COMMITS=$(git log --oneline --pretty=format:"%s" HEAD)
             CHANGELOG_URL="https://github.com/${{ github.repository }}/commits/${TAG}"
           else
-            COMMITS=$(git log --oneline --pretty=format:"%s" ${PREV_TAG}..HEAD)
+            # Get commits between previous tag and current HEAD (excludes version bump commits)
+            COMMITS=$(git log --oneline --pretty=format:"%s" ${PREV_TAG}..HEAD -- . ':!Cargo.toml' ':!npm/package.json' || git log --oneline --pretty=format:"%s" ${PREV_TAG}..HEAD)
             CHANGELOG_URL="https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
           fi
 
+          # Filter out version bump commits
+          COMMITS=$(echo "$COMMITS" | grep -v "^chore: bump version" || true)
+
           FEATS=$(echo "$COMMITS" | grep "^feat" || true)
           FIXES=$(echo "$COMMITS" | grep "^fix" || true)
-          OTHERS=$(echo "$COMMITS" | grep -v "^feat\|^fix" || true)
+          DOCS=$(echo "$COMMITS" | grep "^docs" || true)
+          OTHERS=$(echo "$COMMITS" | grep -v "^feat\|^fix\|^docs\|^$" || true)
 
           if [ -n "$FEATS" ]; then
             echo "### Features" >> release_notes.md
@@ -191,11 +205,26 @@ jobs:
             echo "" >> release_notes.md
           fi
 
+          if [ -n "$DOCS" ]; then
+            echo "### Documentation" >> release_notes.md
+            echo "$DOCS" | sed 's/^/- /' >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
           if [ -n "$OTHERS" ]; then
             echo "### Other Changes" >> release_notes.md
             echo "$OTHERS" | sed 's/^/- /' >> release_notes.md
             echo "" >> release_notes.md
           fi
+
+          # Summary: describe what changed in human-readable form
+          echo "### Summary" >> release_notes.md
+          FEAT_COUNT=$(echo "$FEATS" | grep -c "." || echo "0")
+          FIX_COUNT=$(echo "$FIXES" | grep -c "." || echo "0")
+          DOC_COUNT=$(echo "$DOCS" | grep -c "." || echo "0")
+          OTHER_COUNT=$(echo "$OTHERS" | grep -c "." || echo "0")
+          echo "This release includes ${FEAT_COUNT} feature(s), ${FIX_COUNT} fix(es), ${DOC_COUNT} doc update(s), and ${OTHER_COUNT} other change(s)." >> release_notes.md
+          echo "" >> release_notes.md
 
           echo "### Assets" >> release_notes.md
           echo "- \`boundform-x86_64-pc-windows-gnu.exe\` — Windows x64" >> release_notes.md
