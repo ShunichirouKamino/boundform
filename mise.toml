@@ -1,0 +1,12 @@
+[tools]
+rust = "latest"
+node = "lts"
+
+[tools."npm:@anthropic-ai/claude-code"]
+version = "latest"
+
+[settings]
+experimental = true
+
+[env]
+CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "x86_64-w64-mingw32-gcc"

@@ -1,0 +1,142 @@
+# Design Decisions & Background
+
+This document captures the design discussions and decisions made during the inception of `boundform`.
+
+## Motivation
+
+Testing form input boundary values is a common need, but existing tools don't hit the sweet spot:
+
+- **Playwright / Cypress**: Full browser automation — too heavy for just validating form constraints.
+- **Unit testing validation logic**: Doesn't catch drift between HTML attributes and code-level validation.
+
+There's a gap between these two extremes:
+
+```
+[Heavy]  Playwright E2E         ← full browser, slow, complex setup
+[Gap]    ← boundform fills this
+[Light]  Unit tests on logic    ← no HTML awareness
+```
+
+## Core Insight: SSR Makes This Possible
+
+Modern frameworks (Next.js App Router, SvelteKit, Nuxt, Rails, Laravel, Django) render HTML on the server by default. A simple HTTP GET returns fully-rendered HTML including `<form>` and `<input>` elements with all their constraint attributes.
+
+### Verified Behavior
+
+**Next.js 15+ (App Router) with `'use client'` components:**
+- Even components marked with `'use client'` are SSR-rendered on the first request (server-side pre-rendering before hydration).
+- A plain `curl` to `http://localhost:3000/register` returns HTML containing:
+  ```html
+  <input type="text" required="" name="username" />
+  <input type="email" required="" name="email" />
+  <input type="password" required="" minLength="10" name="password" />
+  ```
+- This means `boundform` can extract constraints without a browser engine.
+
+**SvelteKit:**
+- SSR is the default (`ssr = true`). Only explicitly setting `export const ssr = false` disables it.
+- Works with `boundform` out of the box.
+
+### Compatibility Matrix
+
+| Framework | SSR by Default | Compatible |
+|---|---|---|
+| Next.js (App Router) | Yes | Yes |
+| SvelteKit | Yes | Yes |
+| Nuxt | Yes | Yes |
+| Rails / Laravel / Django | Yes | Yes |
+| React (Vite, CRA) | No (CSR) | No |
+| Vue (Vite) | No (CSR) | No |
+
+## Architecture Decision: No Browser Engine
+
+We deliberately chose NOT to embed a browser engine (headless Chrome, WebKit, etc.):
+
+- **Pros**: Tiny binary, fast execution, minimal dependencies, easy CI integration
+- **Cons**: Cannot analyze CSR-only (SPA) apps
+- **Trade-off**: This is acceptable because the majority of modern full-stack frameworks use SSR by default.
+
+Future consideration: an optional `--headless` flag could add browser support for CSR apps, but this is out of scope for MVP.
+
+## Boundary Value Strategy
+
+For each HTML constraint attribute, generate test values at and around the boundary:
+
+| Constraint | Test Values |
+|---|---|
+| `required` | `""`, `" "` (whitespace) |
+| `min=N` | `N-1`, `N`, `N+1` |
+| `max=N` | `N-1`, `N`, `N+1` |
+| `minlength=N` | string of length `N-1`, `N`, `N+1` |
+| `maxlength=N` | string of length `N-1`, `N`, `N+1` |
+| `pattern=regex` | matching string, non-matching string |
+| `type=email` | valid email, invalid formats |
+| `type=number` | numeric, non-numeric, boundaries |
+| `step=N` | on-step, off-step |
+
+## Field Name Resolution: `name` → `id` Fallback
+
+HTML forms traditionally use the `name` attribute to identify fields in form submissions. However, React and other state-managed frameworks often omit `name` entirely — they use `useState` / `useForm` to track values in JavaScript and submit via `fetch()` or Server Actions, so the `name` attribute is unnecessary for their workflow.
+
+In practice, these frameworks still set `id` on inputs (for `<label htmlFor>` association and accessibility). Boundform falls back to `id` when `name` is absent:
+
+```
+name="email"           →  field name: "email"
+id="email" (no name)   →  field name: "email"
+(neither)              →  field skipped
+```
+
+### Verified example
+
+A real Next.js 15 game registration form renders:
+
+```html
+<input type="date" id="date" required />       <!-- no name -->
+<input type="text" id="oka" pattern="[0-9]*" /> <!-- no name -->
+<input type="text" id="tobi" pattern="[0-9]*" /><!-- no name -->
+```
+
+Without the `id` fallback, all three fields are invisible to boundform. With the fallback, they are correctly extracted and their constraints (`required`, `pattern`) can be validated.
+
+## Scope Boundary: Fields Without `name` or `id`
+
+Fields that have neither `name` nor `id` are intentionally skipped. We considered several approaches to handle them (nth-child indexing, CSS selectors, label proximity) but concluded that the cost/complexity outweighs the benefit:
+
+- **nth-child indexing** is fragile — any HTML structure change shifts all indices.
+- **CSS selectors** require users to understand the rendered DOM structure.
+- **Label proximity** is unreliable across different markup patterns.
+
+More importantly, fields without `name` or `id` are typically:
+1. **Internal elements from component libraries** (Radix, shadcn/ui) marked `aria-hidden="true"` — not real form controls.
+2. **State-managed inputs** where validation is handled entirely in JavaScript — HTML constraints are absent or incomplete.
+
+In both cases, inspecting these elements provides little value.
+
+### Recommendation
+
+Rather than adding complexity to boundform, we recommend adding `name` or `id` to form inputs that should be testable. This is also good practice for accessibility (`<label for="...">`) and standard form submission.
+
+### Verified example
+
+A real Next.js 15 score input page renders 8 identical inputs with no identifiers:
+
+```html
+<input type="text" inputMode="numeric" pattern="[0-9]*" value="250" />
+<input type="text" inputMode="numeric" pattern="[0-9]*" value="250" />
+<input type="text" inputMode="numeric" pattern="[0-9]*" value="250" />
+<!-- ... 5 more identical inputs -->
+```
+
+Even with nth-child support, a YAML config listing 8 entries by index would be painful to write and maintain. The better path is to add `name="score_east"`, `name="score_south"`, etc.
+
+## Observation: Attribute Drift
+
+During testing with a real Next.js 15 project, we noticed that some attributes present in source code (e.g., `maxLength={50}` in React JSX) were NOT present in the rendered HTML. This suggests a potential feature: comparing source-level constraints against rendered HTML to detect drift.
+
+## Tech Stack Rationale
+
+- **Rust**: Single binary distribution, fast execution, strong type system for parsing
+- **reqwest**: De facto HTTP client in Rust ecosystem
+- **scraper**: CSS-selector-based HTML parsing, lightweight alternative to full DOM
+- **clap**: Standard CLI framework with derive macros
+- **No browser dependency**: Core differentiator from Playwright/Cypress

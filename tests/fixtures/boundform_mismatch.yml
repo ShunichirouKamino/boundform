@@ -1,0 +1,16 @@
+pages:
+  - url: "tests/fixtures/register.html"
+    forms:
+      - id: "register"
+        fields:
+          email:
+            type: email
+            required: true
+          username:
+            type: text
+            required: true
+            maxlength: 30
+          password:
+            type: password
+            required: true
+            minlength: 12

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sample App — boundform demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; }
+    form { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; }
+    label { display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem; }
+    input, textarea, select { display: block; width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box; }
+    button { margin-top: 1.5rem; padding: 0.5rem 1.5rem; }
+    .hint { font-size: 0.8rem; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>boundform Sample App</h1>
+  <p>This page contains two forms with various HTML5 constraint attributes.<br>
+     Use it to test <code>boundform</code> locally.</p>
+
+  <!-- ========== Registration Form ========== -->
+  <h2>1. Registration</h2>
+  <form name="register" action="/register" method="post">
+
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username"
+           required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" />
+    <span class="hint">3-20 chars, alphanumeric + underscore</span>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required />
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required minlength="10" maxlength="128" />
+    <span class="hint">10-128 characters</span>
+
+    <label for="age">Age</label>
+    <input type="number" id="age" name="age" min="13" max="150" step="1" />
+    <span class="hint">Optional, 13-150</span>
+
+    <label for="website">Website</label>
+    <input type="url" id="website" name="website" />
+
+    <button type="submit">Register</button>
+  </form>
+
+  <!-- ========== Feedback Form ========== -->
+  <h2>2. Feedback</h2>
+  <form name="feedback" action="/feedback" method="post">
+
+    <label for="subject">Subject</label>
+    <input type="text" id="subject" name="subject" required maxlength="100" />
+
+    <label for="message">Message</label>
+    <textarea id="message" name="message" required minlength="20" maxlength="2000"></textarea>
+    <span class="hint">20-2000 characters</span>
+
+    <label for="rating">Rating</label>
+    <input type="number" id="rating" name="rating" required min="1" max="5" step="1" />
+    <span class="hint">1-5</span>
+
+    <label for="category">Category</label>
+    <select id="category" name="category" required>
+      <option value="">Choose...</option>
+      <option value="bug">Bug Report</option>
+      <option value="feature">Feature Request</option>
+      <option value="other">Other</option>
+    </select>
+
+    <label for="contact_email">Contact Email (optional)</label>
+    <input type="email" id="contact_email" name="contact_email" />
+
+    <button type="submit">Send Feedback</button>
+  </form>
+</body>
+</html>

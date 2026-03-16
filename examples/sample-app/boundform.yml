@@ -1,0 +1,54 @@
+pages:
+  - url: "examples/sample-app/index.html"
+    forms:
+      # --- Registration Form ---
+      - id: "register"
+        fields:
+          username:
+            type: text
+            required: true
+            minlength: 3
+            maxlength: 20
+            pattern: "[a-zA-Z0-9_]+"
+          email:
+            type: email
+            required: true
+          password:
+            type: password
+            required: true
+            minlength: 10
+            maxlength: 128
+          age:
+            type: number
+            required: false
+            min: 13
+            max: 150
+            step: 1
+          website:
+            type: url
+            required: false
+
+      # --- Feedback Form ---
+      - id: "feedback"
+        fields:
+          subject:
+            type: text
+            required: true
+            maxlength: 100
+          message:
+            type: textarea
+            required: true
+            minlength: 20
+            maxlength: 2000
+          rating:
+            type: number
+            required: true
+            min: 1
+            max: 5
+            step: 1
+          category:
+            type: select
+            required: true
+          contact_email:
+            type: email
+            required: false
