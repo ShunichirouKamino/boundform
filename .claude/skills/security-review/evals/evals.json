@@ -1,0 +1,20 @@
+{
+  "skill_name": "security-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run a full security review of the boundform project",
+      "expected_output": "Comprehensive report covering dependencies, SSRF, path traversal, injection, npm supply chain, with severity ratings and specific file/line references"
+    },
+    {
+      "id": 2,
+      "prompt": "Check src/source.rs for SSRF and injection vulnerabilities — is the URL handling safe? What about cookie/header injection?",
+      "expected_output": "Focused analysis of source.rs covering URL scheme validation, redirect behavior, CRLF injection in cookies/headers, with specific code references"
+    },
+    {
+      "id": 3,
+      "prompt": "Review the npm package scripts for supply chain security risks — especially the binary download mechanism",
+      "expected_output": "Analysis of download-binary.js covering integrity verification, HTTPS enforcement, cache poisoning, binary execution safety"
+    }
+  ]
+}
