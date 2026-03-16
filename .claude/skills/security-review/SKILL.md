@@ -9,19 +9,35 @@ This skill performs a comprehensive security review by running two agents in par
 1. **Claude Code** — reviews the code inline following the checklist below
 2. **OpenAI Codex** — launched as a separate process via `codex review`
 
-The dual-agent approach catches blind spots that a single reviewer might miss.
+Results are persisted to `reviews/NNNN-YYYY-MM-DD/` and committed to git for historical tracking.
 
 ## Workflow
+
+### Step 0: Create review directory
+
+Determine the next review number by counting existing directories in `reviews/`:
+
+```bash
+# Get next review number (0001, 0002, etc.)
+NEXT=$(printf "%04d" $(( $(ls -d reviews/[0-9]* 2>/dev/null | wc -l) + 1 )))
+DATE=$(date +%Y-%m-%d)
+REVIEW_DIR="reviews/${NEXT}-${DATE}"
+mkdir -p "$REVIEW_DIR"
+```
+
+All outputs from this review session will be saved into this directory.
 
 ### Step 1: Launch Codex in background
 
 Launch Codex review as a background task using the Bash tool with `run_in_background: true`. Use the prompt-only form because `codex review` does not allow `--uncommitted` or `--base` together with a prompt argument.
 
+Direct Codex output into the review directory:
+
 ```bash
-codex review "Read the file AGENTS.md in this repository root. It contains a detailed security review checklist. Follow every section systematically. Report all findings with severity (Critical/High/Medium/Low/Info), file paths, line numbers, and fix recommendations." 2>&1 | tee codex-security-review.md
+codex review "Read the file AGENTS.md in this repository root. It contains a detailed security review checklist. Follow every section systematically. Report all findings with severity (Critical/High/Medium/Low/Info), file paths, line numbers, and fix recommendations." 2>&1 | tee ${REVIEW_DIR}/codex-review.md
 ```
 
-Run this command with `run_in_background: true` so Claude's review can proceed in parallel. The output file will be available when the background task completes.
+Run this command with `run_in_background: true` so Claude's review can proceed in parallel.
 
 **If Codex fails** (authentication error, not installed, etc.), log the error and continue with Claude-only review. Common failures:
 - `refresh_token_reused` → user needs to run `codex logout && codex login`
@@ -63,37 +79,72 @@ For each finding, use this format:
 **Recommendation**: How to fix it
 ```
 
+Save Claude's findings to `${REVIEW_DIR}/claude-review.md`.
+
 ### Step 3: Collect Codex results
 
-After Claude's review is complete, check if the Codex background task has finished. Read `codex-security-review.md` if it exists. If Codex is still running, inform the user that results will appear in `codex-security-review.md` when complete — do NOT delete this file.
+After Claude's review is complete, check if the Codex background task has finished. Read `${REVIEW_DIR}/codex-review.md` if it exists. If Codex is still running, inform the user that results will appear when complete.
 
 ### Step 4: Generate comparison report
 
+Create `${REVIEW_DIR}/summary.md` with the cross-agent comparison:
+
 ```markdown
-## Security Review Summary
+# Security Review #NNNN — YYYY-MM-DD
 
-### Claude Code Findings
-| # | Severity | Category | Issue | File |
-|---|----------|----------|-------|------|
-| 1 | HIGH     | SSRF     | ...   | ...  |
+## Findings detected by both agents (high confidence)
+| Issue | Claude Severity | Codex Severity |
+|-------|:-:|:-:|
+| ... | ... | ... |
 
-### Codex Findings
-(from codex-security-review.md, or "Codex still running / unavailable")
+## Findings unique to Claude
+| # | Severity | Issue | File |
+|---|----------|-------|------|
 
-### Cross-Agent Analysis
-- Findings detected by both agents (high confidence)
-- Findings unique to Claude
-- Findings unique to Codex
+## Findings unique to Codex
+| # | Severity | Issue | File |
+|---|----------|-------|------|
 
-### Top 3 Priority Fixes
+## Top 3 Priority Fixes
 1. ...
 2. ...
 3. ...
+
+## Review Metadata
+- Claude model: (model from session)
+- Codex model: (from codex output header)
+- Date: YYYY-MM-DD
+- Commit: (current HEAD SHA)
 ```
 
-### Step 5: Offer clean up
+### Step 5: Commit the review
 
-Ask the user if they want to keep `codex-security-review.md` for reference. Only delete if the user confirms.
+Stage and commit the review directory:
+
+```bash
+git add ${REVIEW_DIR}/
+git commit -m "docs: security review #${NEXT} (${DATE})
+
+Claude + Codex multi-agent review.
+Findings: X high, Y medium, Z low."
+```
+
+Ask the user if they want to push, or if they want to fix the findings first.
+
+### Final directory structure
+
+```
+reviews/
+├── 0001-2026-03-16/
+│   ├── claude-review.md
+│   ├── codex-review.md
+│   └── summary.md
+├── 0002-2026-03-17/
+│   ├── claude-review.md
+│   ├── codex-review.md
+│   └── summary.md
+└── ...
+```
 
 ## Reference
 
