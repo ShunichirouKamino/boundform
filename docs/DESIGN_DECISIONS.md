@@ -53,10 +53,28 @@ Modern frameworks (Next.js App Router, SvelteKit, Nuxt, Rails, Laravel, Django) 
 We deliberately chose NOT to embed a browser engine (headless Chrome, WebKit, etc.):
 
 - **Pros**: Tiny binary, fast execution, minimal dependencies, easy CI integration
-- **Cons**: Cannot analyze CSR-only (SPA) apps
+- **Cons**: Cannot analyze CSR-only (SPA) apps directly via URL
 - **Trade-off**: This is acceptable because the majority of modern full-stack frameworks use SSR by default.
 
-Future consideration: an optional `--headless` flag could add browser support for CSR apps, but this is out of scope for MVP.
+### SPA support via composition (not embedding)
+
+Rather than adding a browser engine (which would make boundform another Playwright), SPA users can capture rendered HTML externally and pass it as a local file:
+
+```
+[Playwright / browser] → rendered.html → [boundform] → report
+```
+
+This follows the Unix philosophy: boundform is an HTML constraint validator, not an HTML renderer. The "how to get the HTML" is left to the user's toolchain.
+
+Alternatives considered and rejected:
+
+| Approach | Why rejected |
+|---|---|
+| Embed headless Chrome (via `chromiumoxide` / `headless_chrome`) | Adds ~50MB+ dependency, slow startup, contradicts "lightweight" positioning |
+| Ship a separate `boundform-browser` binary | Maintenance burden of two binaries, confusing UX |
+| `--headless` flag with optional browser feature | Feature-flagged complexity, build matrix issues |
+
+The composition approach (Playwright CLI → file → boundform) achieves the same result with zero added complexity to boundform itself.
 
 ## Boundary Value Strategy
 

@@ -1,0 +1,20 @@
+{
+  "skill_name": "boundform-guide",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "How do I write a boundform YAML config for checking a login form at localhost:3000/login that has email and password fields?",
+      "expected_output": "Should provide a complete YAML example with pages, forms (using index), and fields with type/required constraints"
+    },
+    {
+      "id": 2,
+      "prompt": "boundform says 0 fields found on my page but I can see the form in the browser. What's wrong?",
+      "expected_output": "Should explain name/id requirement, id fallback, and suggest checking HTML with curl. Should mention component library hidden elements."
+    },
+    {
+      "id": 3,
+      "prompt": "I need to check forms on pages that require login. How do I handle authentication with boundform?",
+      "expected_output": "Should explain --cookie flag, how to get cookie from DevTools, split config pattern for public/auth pages, and mention --header for Bearer tokens"
+    }
+  ]
+}

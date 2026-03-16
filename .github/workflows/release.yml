@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          TAG=${GITHUB_REF#refs/tags/}
+
+          echo "## What's Changed" > release_notes.md
+          echo "" >> release_notes.md
+
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --oneline --pretty=format:"%s" HEAD)
+            CHANGELOG_URL="https://github.com/${{ github.repository }}/commits/${TAG}"
+          else
+            COMMITS=$(git log --oneline --pretty=format:"%s" ${PREV_TAG}..HEAD)
+            CHANGELOG_URL="https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
+          fi
+
+          # Categorize commits
+          FEATS=$(echo "$COMMITS" | grep "^feat" || true)
+          FIXES=$(echo "$COMMITS" | grep "^fix" || true)
+          OTHERS=$(echo "$COMMITS" | grep -v "^feat\|^fix" || true)
+
+          if [ -n "$FEATS" ]; then
+            echo "### Features" >> release_notes.md
+            echo "$FEATS" | sed 's/^/- /' >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          if [ -n "$FIXES" ]; then
+            echo "### Bug Fixes" >> release_notes.md
+            echo "$FIXES" | sed 's/^/- /' >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          if [ -n "$OTHERS" ]; then
+            echo "### Other Changes" >> release_notes.md
+            echo "$OTHERS" | sed 's/^/- /' >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          echo "**Full Changelog**: ${CHANGELOG_URL}" >> release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} `
+            target/x86_64-pc-windows-gnu/release/boundform.exe `
+            --title "${{ github.ref_name }}" `
+            --notes-file release_notes.md
+
+  # Future: add Linux and macOS builds
+  # build-linux:
+  #   runs-on: ubuntu-latest
+  #   ...
+  #
+  # build-macos:
+  #   runs-on: macos-latest
+  #   ...
+  #
+  # Future: npm publish
+  # publish-npm:
+  #   needs: [build-and-release]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/setup-node@v4
+  #     - run: npm publish

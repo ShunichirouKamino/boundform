@@ -1,2 +1,4 @@
 /target
 boundform-mj-mng*.yml
+# Skill eval workspaces (test artifacts, not source)
+.claude/skills/*-workspace/

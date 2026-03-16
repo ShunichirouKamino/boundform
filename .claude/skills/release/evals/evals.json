@@ -1,0 +1,20 @@
+{
+  "skill_name": "release",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/release",
+      "expected_output": "Should read version from Cargo.toml, run pre-flight checks, build, generate conventional-commits release notes, create tag, push, and create GitHub release with binary attached"
+    },
+    {
+      "id": 2,
+      "prompt": "/release 0.2.0",
+      "expected_output": "Should use 0.2.0 as version instead of reading Cargo.toml, bump Cargo.toml, commit the bump, then follow the same release flow"
+    },
+    {
+      "id": 3,
+      "prompt": "/release (with uncommitted changes in working directory)",
+      "expected_output": "Should detect dirty worktree and warn the user before proceeding, asking for confirmation"
+    }
+  ]
+}

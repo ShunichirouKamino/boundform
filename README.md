@@ -133,10 +133,62 @@ Works with any framework that returns rendered HTML via HTTP — no browser engi
 | SvelteKit | Yes | Yes |
 | Nuxt | Yes | Yes |
 | Rails / Laravel / Django | Yes | Yes |
-| React (Vite, CRA) | No (CSR) | No* |
-| Vue (Vite) | No (CSR) | No* |
+| React (Vite, CRA) | No (CSR) | Via workaround* |
+| Vue (Vite) | No (CSR) | Via workaround* |
 
-\* CSR-only apps return an empty `<div id="root">` — the form HTML is generated client-side by JavaScript and cannot be extracted with a simple GET request.
+\* CSR-only apps return an empty `<div id="root">` — the form HTML is generated client-side by JavaScript and cannot be extracted with a simple GET request. See below for a workaround.
+
+### Using boundform with SPA / CSR apps
+
+boundform intentionally does not embed a browser engine — that would make it another Playwright. Instead, you can use an external tool to obtain the rendered HTML and pass it to boundform as a local file:
+
+**Step 1: Capture rendered HTML with Playwright**
+
+```bash
+# Install Playwright if you haven't
+npm install -g playwright
+
+# Capture the fully rendered HTML
+npx playwright evaluate \
+  --url http://localhost:5173/register \
+  "document.documentElement.outerHTML" > rendered.html
+```
+
+Or save it from a browser: open the page, right-click, **"Save As" → "Webpage, HTML Only"**.
+
+**Step 2: Point boundform at the saved file**
+
+```yaml
+# boundform.yml
+pages:
+  - url: "rendered.html"    # local file path instead of URL
+    forms:
+      - index: 0
+        fields:
+          email:
+            type: email
+            required: true
+```
+
+```bash
+boundform --config boundform.yml
+```
+
+**CI example (GitHub Actions):**
+
+```yaml
+steps:
+  - name: Capture SPA HTML
+    run: |
+      npx playwright evaluate \
+        --url http://localhost:5173/register \
+        "document.documentElement.outerHTML" > rendered.html
+
+  - name: Validate form constraints
+    run: boundform --config boundform.yml
+```
+
+This keeps boundform fast and dependency-free while still supporting CSR apps through composition.
 
 ## Installation
 
@@ -147,7 +199,7 @@ cargo install boundform
 Or build from source:
 
 ```bash
-git clone https://github.com/your-username/boundform.git
+git clone https://github.com/ShunichirouKamino/boundform.git
 cd boundform
 cargo build --release
 ```
