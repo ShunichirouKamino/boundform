@@ -1,6 +1,6 @@
 {
   "name": "boundform",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A fast guardrail before E2E — validate HTML form constraints against a YAML spec, no browser required",
   "license": "MIT",
   "repository": {
