@@ -1,0 +1,34 @@
+{
+  "name": "boundform",
+  "version": "0.1.0",
+  "description": "A fast guardrail before E2E — validate HTML form constraints against a YAML spec, no browser required",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShunichirouKamino/boundform.git",
+    "directory": "npm"
+  },
+  "homepage": "https://github.com/ShunichirouKamino/boundform",
+  "keywords": [
+    "form",
+    "validation",
+    "html",
+    "boundary-value",
+    "testing",
+    "cli",
+    "ssr",
+    "constraint"
+  ],
+  "bin": {
+    "boundform": "./bin/boundform.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "skills/",
+    "templates/"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

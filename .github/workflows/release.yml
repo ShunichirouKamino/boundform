@@ -9,15 +9,36 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: windows-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            asset: boundform-x86_64-pc-windows-gnu.exe
+            binary: target/x86_64-pc-windows-gnu/release/boundform.exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: boundform-x86_64-unknown-linux-gnu
+            binary: target/x86_64-unknown-linux-gnu/release/boundform
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset: boundform-x86_64-apple-darwin
+            binary: target/x86_64-apple-darwin/release/boundform
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: boundform-aarch64-apple-darwin
+            binary: target/aarch64-apple-darwin/release/boundform
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-gnu
+          targets: ${{ matrix.target }}
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -26,16 +47,37 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release binary
-        run: cargo build --release --target x86_64-pc-windows-gnu
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary to asset name
+        shell: bash
+        run: cp ${{ matrix.binary }} ${{ matrix.asset }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Generate release notes
         id: notes
         shell: bash
         run: |
-          # Get previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           TAG=${GITHUB_REF#refs/tags/}
 
@@ -50,7 +92,6 @@ jobs:
             CHANGELOG_URL="https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
           fi
 
-          # Categorize commits
           FEATS=$(echo "$COMMITS" | grep "^feat" || true)
           FIXES=$(echo "$COMMITS" | grep "^fix" || true)
           OTHERS=$(echo "$COMMITS" | grep -v "^feat\|^fix" || true)
@@ -73,30 +114,43 @@ jobs:
             echo "" >> release_notes.md
           fi
 
+          echo "### Assets" >> release_notes.md
+          echo "- \`boundform-x86_64-pc-windows-gnu.exe\` — Windows x64" >> release_notes.md
+          echo "- \`boundform-x86_64-unknown-linux-gnu\` — Linux x64" >> release_notes.md
+          echo "- \`boundform-x86_64-apple-darwin\` — macOS x64 (Intel)" >> release_notes.md
+          echo "- \`boundform-aarch64-apple-darwin\` — macOS ARM64 (Apple Silicon)" >> release_notes.md
+          echo "" >> release_notes.md
           echo "**Full Changelog**: ${CHANGELOG_URL}" >> release_notes.md
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ github.ref_name }} `
-            target/x86_64-pc-windows-gnu/release/boundform.exe `
-            --title "${{ github.ref_name }}" `
+          gh release create ${{ github.ref_name }} \
+            artifacts/**/* \
+            --title "${{ github.ref_name }}" \
             --notes-file release_notes.md
 
-  # Future: add Linux and macOS builds
-  # build-linux:
-  #   runs-on: ubuntu-latest
-  #   ...
-  #
-  # build-macos:
-  #   runs-on: macos-latest
-  #   ...
-  #
-  # Future: npm publish
-  # publish-npm:
-  #   needs: [build-and-release]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/setup-node@v4
-  #     - run: npm publish
+  publish-npm:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Sync version from tag
+        working-directory: npm
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          npm version $VERSION --no-git-tag-version
+
+      - name: Publish to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
