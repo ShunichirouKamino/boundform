@@ -1,91 +1,109 @@
 ---
 name: security-review
-description: Perform a comprehensive security vulnerability review of the boundform codebase. Use this skill whenever the user asks for a security audit, vulnerability check, code review for security issues, penetration testing guidance, or wants to check for CVEs, SSRF, injection, or supply chain risks in the project. Also trigger when the user mentions OWASP, cargo audit, dependency vulnerabilities, or asks about the safety of cookie/header handling.
+description: Perform a multi-agent security vulnerability review of the boundform codebase using both Claude Code and OpenAI Codex in parallel. Use this skill whenever the user asks for a security audit, vulnerability check, code review for security, penetration testing guidance, or wants to check for CVEs, SSRF, injection, or supply chain risks. Also trigger when the user mentions OWASP, cargo audit, dependency vulnerabilities, cookie/header handling safety, or wants a cross-agent security review.
 ---
 
-# Security Review for boundform
+# Multi-Agent Security Review
 
-This skill performs a comprehensive security vulnerability review of the boundform codebase covering Rust code, npm package, and dependencies.
+This skill performs a comprehensive security review by running two agents in parallel:
+1. **Claude Code** — reviews the code inline following the checklist below
+2. **OpenAI Codex** — launched as a separate process via `codex review`
 
-## Review Procedure
+The dual-agent approach catches blind spots that a single reviewer might miss.
 
-Perform each check in order. For each finding, report severity, file location, and recommendation.
+## Workflow
 
-### Step 1: Dependency Audit
+### Step 1: Launch Codex in background
+
+Start Codex review as a background process. The `codex review` command accepts EITHER a scope flag (`--uncommitted`, `--base`) OR a prompt, but NOT both. Use the prompt form to direct Codex to read AGENTS.md:
 
 ```bash
-# Rust dependencies
-cargo audit
-
-# Check for outdated crates with known issues
-cargo outdated
+codex review "Read the file AGENTS.md in this repository root. It contains a detailed security review checklist. Follow every section systematically. Report all findings with severity (Critical/High/Medium/Low/Info), file paths, line numbers, and fix recommendations." 2>&1 | tee codex-security-review.md &
+CODEX_PID=$!
 ```
 
-If `cargo audit` is not installed: `cargo install cargo-audit`.
+**If Codex fails** (authentication error, not installed, etc.), log the error and continue with Claude-only review. Common failures:
+- `refresh_token_reused` → user needs to run `codex logout && codex login`
+- `command not found` → install with `npm install -g @openai/codex`
+- `--uncommitted cannot be used with PROMPT` → this is expected, use the prompt-only form above
 
-Review the output and flag any known CVEs. Even if no CVEs are found, review key dependencies for unsafe code:
-- `reqwest` — HTTP client, handles user URLs
-- `scraper` — HTML parser, processes untrusted HTML
-- `serde_yml` — YAML parser, processes user config
+### Step 2: Run Claude's review
 
-### Step 2: Code-level Security Review
+While Codex runs in the background, perform Claude's own review by reading source files and checking each category.
 
-Read the following files and check for the vulnerabilities listed. Refer to `AGENTS.md` in the project root for the full checklist — it contains detailed descriptions of what to look for in each file.
+#### 2a. Dependency audit
 
-**Critical files** (handle untrusted input directly):
-1. `src/source.rs` — URL handling, file reading, cookie/header injection
-2. `src/config.rs` — YAML deserialization
-3. `src/parser.rs` — HTML parsing of external content
+Check `Cargo.toml` for dependency versions. If `cargo audit` is available, run it. Flag known-vulnerable or pre-stable dependencies (e.g., `serde_yml 0.0.x`).
 
-**Important files**:
-4. `src/reporter.rs` — Output formatting, potential info disclosure
-5. `src/main.rs` — Error handling, argument processing
-6. `npm/scripts/download-binary.js` — Binary download, integrity verification
-7. `npm/bin/boundform.js` — Binary execution
-8. `npm/scripts/init.js` — File copy operations
+#### 2b. Critical file review
 
-### Step 3: Specific Vulnerability Checks
+Read and analyze these files for vulnerabilities:
 
-For each category, read the relevant source files and assess:
+| File | What to check |
+|------|--------------|
+| `src/source.rs` | SSRF (URL scheme, host validation, redirect following), path traversal (local file reads), CRLF injection (cookie/header values), request timeout, response size limits |
+| `src/config.rs` | YAML deserialization safety (bombs, alias expansion), config size limits |
+| `src/parser.rs` | HTML parsing DoS (document size/depth), memory limits |
+| `src/comparator.rs` | Pattern/regex handling (ReDoS risk) |
+| `src/reporter.rs` | Information disclosure in output |
+| `src/main.rs` | Error handling, credential exposure in CLI args |
+| `npm/scripts/download-binary.js` | Binary integrity verification, HTTPS enforcement, redirect validation, cache poisoning |
+| `npm/bin/boundform.js` | Binary path sanitization, environment passthrough |
+| `npm/scripts/init.js` | Path traversal in file copy, prompt injection via skill files |
 
-| Category | Key Files | What to Check |
-|---|---|---|
-| SSRF | `src/source.rs` | URL scheme validation, redirect following |
-| Path Traversal | `src/source.rs` | Local file access boundaries |
-| CRLF Injection | `src/source.rs` | Cookie/header value validation |
-| YAML Bomb | `src/config.rs` | Deserialization limits |
-| HTML DoS | `src/parser.rs` | Document size/depth limits |
-| ReDoS | `src/comparator.rs` | Pattern complexity bounds |
-| Supply Chain | `npm/scripts/download-binary.js` | Download integrity, HTTPS enforcement |
-| Credential Exposure | all output paths | Cookie values in logs/output |
-| Unwrap Panics | all `.rs` files | `.unwrap()` on untrusted input |
-
-### Step 4: Generate Report
-
-Use this format for each finding:
+For each finding, use this format:
 
 ```markdown
 ### [SEVERITY] Title
 
-**File**: path/to/file.rs:line_number
+**File**: path/to/file:line_number
 **Category**: Category name
 **Description**: What the vulnerability is
 **Impact**: What an attacker could achieve
 **Recommendation**: How to fix it
 ```
 
-Severity: Critical > High > Medium > Low > Info
+### Step 3: Collect Codex results
 
-### Step 5: Summary
+After Claude's review is complete, check if Codex has finished:
 
-End with:
-- Total findings by severity
-- Top 3 most important issues to fix
-- Overall security posture assessment
+```bash
+kill -0 $CODEX_PID 2>/dev/null && echo "Codex still running..." || echo "Codex finished"
+cat codex-security-review.md 2>/dev/null || echo "No Codex output available"
+```
 
-## Cross-agent Review
+If Codex is still running, inform the user and suggest checking `codex-security-review.md` later.
 
-This project also has an `AGENTS.md` file in the project root with the same security checklist formatted for OpenAI Codex. When doing a multi-agent review:
-1. Run this skill in Claude Code for one perspective
-2. Point Codex at the repo — it will read `AGENTS.md` and produce its own review
-3. Compare findings from both agents to catch blind spots
+### Step 4: Generate comparison report
+
+```markdown
+## Security Review Summary
+
+### Claude Code Findings
+| # | Severity | Category | Issue | File |
+|---|----------|----------|-------|------|
+| 1 | HIGH     | SSRF     | ...   | ...  |
+
+### Codex Findings
+(from codex-security-review.md, or "Codex unavailable — auth expired / not installed")
+
+### Cross-Agent Analysis
+- Findings detected by both agents (high confidence)
+- Findings unique to Claude
+- Findings unique to Codex
+
+### Top 3 Priority Fixes
+1. ...
+2. ...
+3. ...
+```
+
+### Step 5: Clean up
+
+```bash
+rm -f codex-security-review.md
+```
+
+## Reference
+
+The full security checklist is in `AGENTS.md` at the project root. Both Claude and Codex use the same checklist for consistent coverage.
