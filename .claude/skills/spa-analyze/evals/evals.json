@@ -1,0 +1,20 @@
+{
+  "skill_name": "spa-analyze",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "React Viteで作ったSPAの登録フォームをboundformで検証したいんだけど、http://localhost:5173/register にあるフォームを分析してYAMLを作ってほしい",
+      "expected_output": "Playwright or DevTools capture, HTML analysis, boundform YAML generation with form fields detected"
+    },
+    {
+      "id": 2,
+      "prompt": "SPAのログイン後の設定ページ http://localhost:5173/settings のフォームをチェックしたい。認証cookieは session=abc123 を使って",
+      "expected_output": "Capture with cookie, HTML analysis, YAML generation for authenticated SPA page"
+    },
+    {
+      "id": 3,
+      "prompt": "SPAで3ページ分のフォームをまとめてYAML生成してほしい: /register, /login, /profile",
+      "expected_output": "Multiple page capture, combined YAML config with all three pages"
+    }
+  ]
+}
