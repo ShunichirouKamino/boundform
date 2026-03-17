@@ -20,9 +20,13 @@ async function main() {
     // Filter environment variables to avoid leaking secrets to the binary.
     // Only pass PATH and common locale/terminal variables.
     const ALLOWED_ENV_PREFIXES = ["PATH", "HOME", "USER", "LANG", "LC_", "TERM", "COLORTERM", "NO_COLOR", "FORCE_COLOR"];
+    const ALLOWED_ENV_EXACT = new Set(["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"]);
     const filteredEnv = {};
     for (const [key, value] of Object.entries(process.env)) {
-      if (ALLOWED_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix))) {
+      if (
+        ALLOWED_ENV_EXACT.has(key) ||
+        ALLOWED_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix))
+      ) {
         filteredEnv[key] = value;
       }
     }

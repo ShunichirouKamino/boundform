@@ -1,12 +1,117 @@
 const https = require("https");
+const http = require("http");
+const { URL } = require("url");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
 const REPO = "ShunichirouKamino/boundform";
-const BINARY_NAME = "boundform";
 const MAX_REDIRECTS = 5;
+const CONNECT_TIMEOUT_MS = 30000;
+
+/**
+ * Resolve proxy URL from environment variables.
+ * Checks HTTPS_PROXY, https_proxy, HTTP_PROXY, http_proxy (in that order).
+ * Returns null if no proxy is configured or NO_PROXY matches the host.
+ */
+function getProxyUrl(targetUrl) {
+  const noProxy = process.env.NO_PROXY || process.env.no_proxy || "";
+  if (noProxy) {
+    const { hostname } = new URL(targetUrl);
+    const noProxyList = noProxy.split(",").map((s) => s.trim().toLowerCase());
+    if (
+      noProxyList.includes("*") ||
+      noProxyList.some(
+        (entry) => hostname === entry || hostname.endsWith(`.${entry}`)
+      )
+    ) {
+      return null;
+    }
+  }
+
+  const proxy =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    null;
+  return proxy || null;
+}
+
+/**
+ * Make an HTTPS GET request, routing through a proxy if configured.
+ * Uses HTTP CONNECT tunneling for HTTPS-over-proxy.
+ * Returns a Promise that resolves with the response.
+ */
+function httpsGet(url, options = {}) {
+  const proxyUrl = getProxyUrl(url);
+
+  if (!proxyUrl) {
+    return new Promise((resolve, reject) => {
+      https
+        .get(url, options, (res) => resolve(res))
+        .on("error", reject);
+    });
+  }
+
+  const proxy = new URL(proxyUrl);
+  const target = new URL(url);
+
+  return new Promise((resolve, reject) => {
+    const connectHeaders = {
+      Host: `${target.hostname}:${target.port || 443}`,
+      "User-Agent": options.headers?.["User-Agent"] || "boundform-npm",
+    };
+
+    // Support proxy authentication via http://user:pass@proxy:port
+    if (proxy.username) {
+      const auth = Buffer.from(
+        `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password || "")}`
+      ).toString("base64");
+      connectHeaders["Proxy-Authorization"] = `Basic ${auth}`;
+    }
+
+    const connectReq = http.request({
+      host: proxy.hostname,
+      port: proxy.port || 80,
+      method: "CONNECT",
+      path: `${target.hostname}:${target.port || 443}`,
+      headers: connectHeaders,
+    });
+
+    connectReq.setTimeout(CONNECT_TIMEOUT_MS, () => {
+      connectReq.destroy(
+        new Error(`Proxy CONNECT timed out after ${CONNECT_TIMEOUT_MS / 1000}s`)
+      );
+    });
+
+    connectReq.on("connect", (connectRes, socket) => {
+      if (connectRes.statusCode !== 200) {
+        socket.destroy();
+        reject(
+          new Error(
+            `Proxy CONNECT failed with status ${connectRes.statusCode}. ` +
+              `Check proxy authentication and access to ${target.hostname}`
+          )
+        );
+        return;
+      }
+
+      const tlsOptions = {
+        ...options,
+        socket,
+        servername: target.hostname,
+      };
+      https
+        .get(url, tlsOptions, (res) => resolve(res))
+        .on("error", reject);
+    });
+
+    connectReq.on("error", reject);
+    connectReq.end();
+  });
+}
 
 // Map Node.js platform/arch to Rust target and binary name
 function getPlatformInfo() {
@@ -70,43 +175,34 @@ function getBinaryPath() {
  * Follow HTTPS redirects with security constraints:
  * - Only follow HTTPS URLs (reject HTTP downgrade)
  * - Limit redirect depth to prevent infinite loops
- * - Only follow redirects to github.com or github-related domains
  */
-function followRedirects(url, depth = 0) {
-  return new Promise((resolve, reject) => {
-    if (depth > MAX_REDIRECTS) {
-      reject(new Error(`Too many redirects (max: ${MAX_REDIRECTS})`));
-      return;
-    }
+async function followRedirects(url, depth = 0) {
+  if (depth > MAX_REDIRECTS) {
+    throw new Error(`Too many redirects (max: ${MAX_REDIRECTS})`);
+  }
 
-    // Reject non-HTTPS URLs (prevent downgrade attacks)
-    if (!url.startsWith("https://")) {
-      reject(
-        new Error(
-          `Refusing to follow non-HTTPS URL: ${url}. Only HTTPS is allowed for binary downloads.`
-        )
-      );
-      return;
-    }
+  // Reject non-HTTPS URLs (prevent downgrade attacks)
+  if (!url.startsWith("https://")) {
+    throw new Error(
+      `Refusing to follow non-HTTPS URL: ${url}. Only HTTPS is allowed for binary downloads.`
+    );
+  }
 
-    https
-      .get(url, { headers: { "User-Agent": "boundform-npm" } }, (res) => {
-        if (
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          followRedirects(res.headers.location, depth + 1)
-            .then(resolve)
-            .catch(reject);
-        } else if (res.statusCode === 200) {
-          resolve(res);
-        } else {
-          reject(new Error(`HTTP ${res.statusCode} fetching ${url}`));
-        }
-      })
-      .on("error", reject);
+  const res = await httpsGet(url, {
+    headers: { "User-Agent": "boundform-npm" },
   });
+
+  if (
+    res.statusCode >= 300 &&
+    res.statusCode < 400 &&
+    res.headers.location
+  ) {
+    return followRedirects(res.headers.location, depth + 1);
+  } else if (res.statusCode === 200) {
+    return res;
+  } else {
+    throw new Error(`HTTP ${res.statusCode} fetching ${url}`);
+  }
 }
 
 /**
