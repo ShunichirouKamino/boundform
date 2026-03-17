@@ -147,47 +147,6 @@ A real Next.js 15 score input page renders 8 identical inputs with no identifier
 
 Even with nth-child support, a YAML config listing 8 entries by index would be painful to write and maintain. The better path is to add `name="score_east"`, `name="score_south"`, etc.
 
-## Design Premise: HTML Attributes as the Validation Surface
-
-boundform は **SSRで返されるHTMLに制約属性が正しく存在するか** を検証するツールである。Zodなどの JavaScript バリデーションライブラリの内容は検査対象外。
-
-### なぜ HTML 属性が重要か
-
-Zodだけで制約を定義した場合、HTML には `<input name="password">` のように属性が何もないタグが出力される。この状態では:
-
-- JSが読み込まれる前のフォーム送信ではバリデーションが一切効かない
-- スクリーンリーダーが `required` を認識できない（アクセシビリティ問題）
-- Server Actions でJS無し送信された場合、サーバー側Zodチェックだけが最後の砦になる
-
-HTML5 制約属性を付与することで、ブラウザネイティブのバリデーション（JS不要・即時フィードバック）が機能する。これはZodの代替ではなく、多層防御の1層目。
-
-### 二重管理の解消: conform
-
-Zodとhtml属性の両方を手書きするのは二重管理になる。この問題を解決するのが [conform](https://conform.guide/) 等のライブラリ:
-
-```
-Zodスキーマ（1箇所に定義）
-  ├→ HTML属性       ← conform が自動生成
-  ├→ クライアントJS  ← zodResolver
-  └→ サーバー側      ← Server Actions
-```
-
-### boundform の位置づけ
-
-```
-Zodスキーマ → (conform等) → SSR HTML → (boundform) → 制約チェック
-                                          ↑
-                           ここだけが守備範囲
-```
-
-boundform は実装方法（手書き、conform、その他）には関与しない。最終的なHTML出力に対して「YAML仕様通りの制約属性があるか」だけを検証する。これにより:
-
-- conform の設定漏れでHTML属性が付与されていないケースを検出
-- デプロイ後にHTML属性が消えた制約ドリフトを検出
-- フレームワーク非依存（Zod/conform/react-hook-form の選択に関係なく動作）
-
-詳細は [ADR-0005](adr/0005-html-attributes-as-validation-surface.md) を参照。
-
 ## Observation: Attribute Drift
 
 During testing with a real Next.js 15 project, we noticed that some attributes present in source code (e.g., `maxLength={50}` in React JSX) were NOT present in the rendered HTML. This suggests a potential feature: comparing source-level constraints against rendered HTML to detect drift.
