@@ -124,23 +124,23 @@ The SSR-rendered HTML now includes constraint attributes:
 <input type="password" name="password" required="" minlength="8" maxlength="128" />
 ```
 
-### getZodConstraint の変換対象
+### What getZodConstraint can (and cannot) convert
 
-conform の `getZodConstraint` が HTML5 属性に変換できるのは以下の Zod メソッドだけです。これ以外の Zod バリデーション（`.regex()`, `.refine()`, `.transform()` など）は HTML 属性に変換されません。
+conform's `getZodConstraint` only converts the following Zod methods to HTML5 attributes. Other Zod validations (`.regex()`, `.refine()`, `.transform()`, etc.) are **not** reflected in the rendered HTML.
 
-| Zod メソッド | HTML5 属性 | 例 |
+| Zod method | HTML5 attribute | Example |
 |---|---|---|
 | `.min(n)` (string) | `minlength` | `z.string().min(8)` → `minlength="8"` |
 | `.max(n)` (string) | `maxlength` | `z.string().max(128)` → `maxlength="128"` |
 | `.min(n)` (number) | `min` | `z.number().min(0)` → `min="0"` |
 | `.max(n)` (number) | `max` | `z.number().max(100)` → `max="100"` |
 | `.email()` / `.url()` | `type` | `z.string().email()` → `type="email"` |
-| `.optional()` でない | `required` | `z.string()` → `required` |
+| not `.optional()` | `required` | `z.string()` → `required` |
 
-boundform の YAML を書く際は、**この表にあるもの**だけを `fields:` に定義してください。変換されない制約（`pattern` など）を YAML に書いても HTML には出力されないため、必ず mismatch になります。
+When writing your boundform YAML, only define constraints from the table above in `fields:`. Constraints that conform does not output (e.g., `pattern`) will always result in a mismatch.
 
 ```yaml
-# ✓ conform が出力する属性だけを検査
+# ✓ Only check attributes that conform actually outputs
 fields:
   password:
     type: password
@@ -148,7 +148,7 @@ fields:
     minlength: 8
     maxlength: 128
 
-# ✗ pattern は conform が出力しないので mismatch になる
+# ✗ pattern is not output by conform — this will always mismatch
 fields:
   password:
     type: password
