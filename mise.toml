@@ -5,6 +5,9 @@ node = "lts"
 [tools."npm:@anthropic-ai/claude-code"]
 version = "latest"
 
+[tools."npm:@openai/codex"]
+version = "latest"
+
 [settings]
 experimental = true
 

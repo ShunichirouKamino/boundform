@@ -1,0 +1,47 @@
+{
+  "skill_name": "review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/review 1443",
+      "description": "後方互換: 全観点・PRスコープ・Codex自動検出",
+      "expected_output": "全5観点でPR差分をレビューし、観点別テーブル付きサマリーをPR Reviewとして投稿する。Codexが利用可能なら自動起動。"
+    },
+    {
+      "id": 2,
+      "prompt": "/review 1443 --perspective security",
+      "description": "単一観点の絞り込み",
+      "expected_output": "セキュリティ観点のみでレビュー。perspective-security.md のチェックリストを適用し、他の観点はスキップ。"
+    },
+    {
+      "id": 3,
+      "prompt": "/review 1443 --perspective architecture,security",
+      "description": "複数観点の絞り込み",
+      "expected_output": "アーキテクチャとセキュリティの2観点のみでレビュー。Review Resultテーブルにも2行のみ表示。"
+    },
+    {
+      "id": 4,
+      "prompt": "/review --scope project --perspective security",
+      "description": "プロジェクト全体スコープ + 観点絞り込み",
+      "expected_output": "PR差分ではなくプロジェクト全体をセキュリティ観点でスキャン。結果をdocs/reviews/に保存。PRコメントは投稿しない。"
+    },
+    {
+      "id": 5,
+      "prompt": "/review 1443 --codex",
+      "description": "Codex強制実行",
+      "expected_output": "Codexをバックグラウンドで起動し、Claude + Codex の両方でレビュー。Cross-validationセクション付きサマリーを投稿。"
+    },
+    {
+      "id": 6,
+      "prompt": "/review 1443 --scope project",
+      "description": "PR指定 + プロジェクトスコープ",
+      "expected_output": "PR番号は参考情報として使用しつつ、プロジェクト全体を全観点でスキャン。結果をdocs/reviews/に保存。"
+    },
+    {
+      "id": 7,
+      "prompt": "セキュリティレビューして",
+      "description": "自然言語トリガー（security-review代替）",
+      "expected_output": "セキュリティ観点でのレビューとして解釈。現在ブランチにPRがあればPRスコープ、なければプロジェクトスコープで実行。"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "branches": {
+    "base": "main",
+    "issuePattern": "issue(\\d+)",
+    "branchFormat": "feature/issue{number}/{kebab-summary}"
+  },
+  "project": {
+    "worktreePrefix": "boundform-worktree"
+  },
+  "build": {
+    "fastCommand": "cargo fmt --check && cargo clippy -- -D warnings && cargo test"
+  },
+  "docs": {
+    "architecture": ["CLAUDE.md"],
+    "bestPractices": [],
+    "checklists": [],
+    "testPractices": null,
+    "domainPractices": null
+  }
+}

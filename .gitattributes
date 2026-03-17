@@ -1,0 +1,11 @@
+# Force LF line endings for shell scripts (prevents CRLF issues in devcontainers)
+*.sh text eol=lf
+
+# Other common files that should always use LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.rs text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
